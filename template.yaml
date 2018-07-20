@@ -1,0 +1,385 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Resources To Support IoT Log Analyzer Blog
+
+Parameters:
+  IoTTopicNamePrefix:
+    Description: Enter Topic Name Prefix
+    Type: String
+    Default: "sky"
+  IoTBaseRuleNamePrefix:
+    Description: Enter Rule Name Prefix
+    Type: String
+    Default: "LogAnalyzer_rule"
+  IoTLogGroupName:
+    Description: Enter Iot CloudwatchLog Group Name
+    Type: String
+
+Resources:
+  LambdaFunctionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: "AllowLambdaServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      Policies:
+        -
+          PolicyName: "InlinePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:GetRecords"
+                  - "kinesis:GetShardIterator"
+                  - "kinesis:ListStreams"
+                  - "kinesis:PutRecord"
+                Resource:
+                  - !GetAtt LogAnalyzerDirectStream.Arn
+                  - !GetAtt LogAnalyzerLambdaStream.Arn
+                  - !GetAtt LogAnalyzerShadowStream.Arn
+                  - !GetAtt LogAnalyzerAttrStream.Arn
+              -
+                Effect: "Allow"
+                Action:
+                  - "ec2:*"
+                  - "iot:DescribeThing"
+                  - "cloudwatch:PutMetricData"
+                  - "sqs:SendMessage"
+                Resource: "*"
+  IoTLogAnalyzerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-IoT-Logs-Analyzer
+      Handler: index_iot_log_analyzer.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Events:
+        IoTLog:
+          Type: CloudWatchLogs
+          Properties:
+            LogGroupName: !Ref IoTLogGroupName
+            FilterPattern: "[date, time, trace_id, principal_id, log_level, event, topic_name, client_id, message]"
+  RouterLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-MessageRouter
+      Handler: index_router.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          DEFAULT_STREAM: !Ref LogAnalyzerLambdaStream
+  IoTAttrLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-IoT-Attribute
+      Handler: index_iot_attr.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+  KinesisDirectStreamReaderLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-KinesisDirectStream-Reader
+      Handler: index_kinesis_reader.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt LogAnalyzerDirectStream.Arn
+            StartingPosition: LATEST
+  KinesisLambdaStreamReaderLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-KinesisLambdaStream-Reader
+      Handler: index_kinesis_reader.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt LogAnalyzerLambdaStream.Arn
+            StartingPosition: LATEST
+  KinesisShadowStreamReaderLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-KinesisShadowStream-Reader
+      Handler: index_kinesis_reader.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt LogAnalyzerShadowStream.Arn
+            StartingPosition: LATEST
+  KinesisAttrStreamReaderLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: LogAnalyzer-KinesisAttrStream-Reader
+      Handler: index_kinesis_reader.handler
+      Runtime: nodejs8.10
+      CodeUri: ./src
+      Role: !GetAtt LambdaFunctionIAMRole.Arn
+      Timeout: 300
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt LogAnalyzerAttrStream.Arn
+            StartingPosition: LATEST
+
+
+  LogAnalyzerDirectStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 16
+  LogAnalyzerLambdaStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 16
+  LogAnalyzerShadowStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 16
+  LogAnalyzerAttrStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 16
+
+
+  LogAnalyzerIoTRuleIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: "AllowIoTServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - "iot.amazonaws.com"
+      Policies:
+        -
+          PolicyName: "InlinePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "kinesis:PutRecord"
+                Resource:
+                  - !GetAtt LogAnalyzerDirectStream.Arn
+                  - !GetAtt LogAnalyzerLambdaStream.Arn
+                  - !GetAtt LogAnalyzerShadowStream.Arn
+                  - !GetAtt LogAnalyzerAttrStream.Arn
+              -
+                Effect: "Allow"
+                Action:
+                  - "lambda:invokeFunction"
+                Resource:
+                  - !GetAtt RouterLambdaFunction.Arn
+                  - !GetAtt IoTAttrLambdaFunction.Arn
+  LogAnalyzerIoTLambdaRule:
+    Type: 'AWS::IoT::TopicRule'
+    Properties:
+      RuleName: !Join
+        - '_'
+        - - !Ref IoTBaseRuleNamePrefix
+          - 'lambda'
+      TopicRulePayload:
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt RouterLambdaFunction.Arn
+        AwsIotSqlVersion: beta
+        Description: Iot Lambda Rule for LogAnalyzer IoT Devices
+        RuleDisabled: false
+        Sql: !Join
+          - ''
+          - - SELECT *, topic() AS topic, timestamp() AS timestamp FROM '
+            - !Ref IoTTopicNamePrefix
+            - '-lambda/+/in'''
+  LogAnalyzerIoTAttrRule:
+    Type: 'AWS::IoT::TopicRule'
+    Properties:
+      RuleName: !Join
+        - '_'
+        - - !Ref IoTBaseRuleNamePrefix
+          - 'attr'
+      TopicRulePayload:
+        Actions:
+          - Kinesis:
+              PartitionKey: '${topic()}'
+              RoleArn: !GetAtt LogAnalyzerIoTRuleIAMRole.Arn
+              StreamName: !Ref LogAnalyzerAttrStream
+        AwsIotSqlVersion: beta
+        Description: Iot Attr Rule for LogAnalyzer IoT Devices
+        RuleDisabled: false
+        Sql: !Join
+          - ''
+          - - SELECT *, topic() AS topic, timestamp() AS timestamp FROM '
+            - !Ref IoTTopicNamePrefix
+            - '-attr/+/in'''
+            - ' WHERE aws_lambda("'
+            - !GetAtt IoTAttrLambdaFunction.Arn
+            - '", {"topic":topic()}).streamName = "'
+            - !Ref LogAnalyzerAttrStream
+            - '"'
+  LogAnalyzerIoTShadowRuleIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Sid: "AllowIoTServiceToAssumeRole"
+            Effect: "Allow"
+            Action:
+              - "sts:AssumeRole"
+            Principal:
+              Service:
+                - "iot.amazonaws.com"
+      Policies:
+        -
+          PolicyName: "InlinePolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "iot:GetThingShadow"
+                Resource: "*"
+  LogAnalyzerIoTShadowRule:
+    Type: 'AWS::IoT::TopicRule'
+    Properties:
+      RuleName: !Join
+        - '_'
+        - - !Ref IoTBaseRuleNamePrefix
+          - 'shadow'
+      TopicRulePayload:
+        Actions:
+          - Kinesis:
+              PartitionKey: '${topic()}'
+              RoleArn: !GetAtt LogAnalyzerIoTRuleIAMRole.Arn
+              StreamName: !Ref LogAnalyzerShadowStream
+        AwsIotSqlVersion: beta
+        Description: Iot Shadow Rule for LogAnalyzer IoT Devices
+        RuleDisabled: false
+        Sql: !Join
+          - ''
+          - - SELECT *, topic() AS topic, timestamp() AS timestamp FROM '
+            - !Ref IoTTopicNamePrefix
+            - '-shadow/+/in'''
+            - ' WHERE get_thing_shadow(substring(substring(topic(), indexof(topic(), "/")+1), 0, indexof(substring(topic(), indexof(topic(), "/")+1), "/")), "'
+            - !GetAtt LogAnalyzerIoTShadowRuleIAMRole.Arn
+            - '").state.reported.kinesis_stream = "'
+            - !Ref LogAnalyzerShadowStream
+            - '"'
+  LogAnalyzerIoTDirectRule:
+    Type: 'AWS::IoT::TopicRule'
+    Properties:
+      RuleName: !Join
+        - '_'
+        - - !Ref IoTBaseRuleNamePrefix
+          - 'direct'
+      TopicRulePayload:
+        Actions:
+          - Kinesis:
+              PartitionKey: '${topic()}'
+              RoleArn: !GetAtt LogAnalyzerIoTRuleIAMRole.Arn
+              StreamName: !Ref LogAnalyzerDirectStream
+        AwsIotSqlVersion: beta
+        Description: Iot Direct Rule for LogAnalyzer IoT Devices
+        RuleDisabled: false
+        Sql: !Join
+          - ''
+          - - SELECT *, topic() AS topic, timestamp() AS timestamp FROM '
+            - !Ref IoTTopicNamePrefix
+            - '-direct/+/in'''
+
+Outputs:
+  LogAnalyzerIoTLambdaRule:
+    Description: "LogAnalyzer IoT Lambda Rule Name"
+    Value: !Ref LogAnalyzerIoTLambdaRule
+  LogAnalyzerIoTAttrRule:
+    Description: "LogAnalyzer IoT Attr Rule Name"
+    Value: !Ref LogAnalyzerIoTAttrRule
+  LogAnalyzerIoTShadowRule:
+    Description: "LogAnalyzer IoT Shadow Rule Name"
+    Value: !Ref LogAnalyzerIoTShadowRule
+  LogAnalyzerIoTDirectRule:
+    Description: "LogAnalyzer IoT Direct Rule Name"
+    Value: !Ref LogAnalyzerIoTDirectRule
+  LogAnalyzerDirectStreamArn:
+    Description: "LogAnalyzer Kinesis Direct Stream ARN"
+    Value: !GetAtt LogAnalyzerDirectStream.Arn
+  LogAnalyzerLambdaStreamArn:
+    Description: "LogAnalyzer Kinesis Lambda Stream ARN"
+    Value: !GetAtt LogAnalyzerLambdaStream.Arn
+  LogAnalyzerShadowStreamArn:
+    Description: "LogAnalyzer IoT Kinesis Stream ARN"
+    Value: !GetAtt LogAnalyzerShadowStream.Arn
+  LogAnalyzerAttrStreamArn:
+    Description: "LogAnalyzer Attr Kinesis Stream ARN"
+    Value: !GetAtt LogAnalyzerAttrStream.Arn
+  IoTLogAnalyzerLambdaFunction:
+    Description: IoT Log Analyzer Function Arn
+    Value: !GetAtt IoTLogAnalyzerLambdaFunction.Arn
+  RouterLambdaFunctionArn:
+    Description: Router Lambda Function Arn
+    Value: !GetAtt RouterLambdaFunction.Arn
+  IoTAttrLambdaFunctionArn:
+    Description: IoT Attr Lambda Function Arn
+    Value: !GetAtt IoTAttrLambdaFunction.Arn
+  KinesisDirectStreamReaderLambdaFunctionArn:
+    Description: Kinesis Stream Reader Direct Function Arn
+    Value: !GetAtt KinesisDirectStreamReaderLambdaFunction.Arn
+  KinesisLambdaStreamReaderLambdaFunctionArn:
+    Description: Kinesis Stream Reader Lambda Function Arn
+    Value: !GetAtt KinesisLambdaStreamReaderLambdaFunction.Arn
+  KinesisShadowStreamReaderLambdaFunctionArn:
+    Description: Kinesis IoT Stream Reader Lambda Function Arn
+    Value: !GetAtt KinesisShadowStreamReaderLambdaFunction.Arn
+  KinesisAttrStreamReaderLambdaFunctionArn:
+    Description: Kinesis Attr Stream Reader Lambda Function Arn
+    Value: !GetAtt KinesisAttrStreamReaderLambdaFunction.Arn

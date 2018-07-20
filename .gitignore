@@ -1,0 +1,14 @@
+___*
+.DS_Store
+*.pyc
+.perun
+.env.local
+node_modules
+package-lock.json
+command
+metric.json
+transics.properties
+aws-2
+samTemplate.yaml
+*.cert.pem
+*.private.key
