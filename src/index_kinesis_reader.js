@@ -1,6 +1,4 @@
 
-// aws dynamodb describe-table --table-name Transics-IoT-Dynamodb
-
 'use strict';
 
 console.log('Loading function');
@@ -9,11 +7,6 @@ var region = process.env.AWS_DEFAULT_REGION;
 
 var AWS = require('aws-sdk');
 var cloudwatch = new AWS.CloudWatch({region: region});
-
-//var tableName = process.env.DYNAMODB_TABLE_NAME;
-
-//var AWS = require('aws-sdk');
-//var documentClient = new AWS.DynamoDB.DocumentClient({region: region});
 
 exports.handler = (event, context, callback) => {
   var current = new Date();
@@ -76,30 +69,4 @@ function save(records, idx, current, callback) {
       }
     }
   });
-
-
-  /*payload = JSON.parse(payload);
-  payload.id = record.recordId;
-  payload.insertedAt = current.toISOString();
-  var params = {
-    Item: payload,
-    TableName: tableName,
-    ReturnConsumedCapacity: "TOTAL",
-    ReturnItemCollectionMetrics: "SIZE"
-    //ReturnValues: NONE | ALL_OLD | UPDATED_OLD | ALL_NEW | UPDATED_NEW
-  };
-  documentClient.put(params, function(err, data) {
-    if (err) {
-      console.log("failed to save records[" + idx + "] : " + err);
-      callback(err, null);
-    }
-    else {
-      if (++idx == records.length) {
-        callback(null, true);
-      }
-      else {
-        save(records, idx, current, callback);
-      }
-    }
-  });*/
 }
