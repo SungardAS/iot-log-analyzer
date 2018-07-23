@@ -12,3 +12,4 @@ aws-2
 samTemplate.yaml
 *.cert.pem
 *.private.key
+tests
