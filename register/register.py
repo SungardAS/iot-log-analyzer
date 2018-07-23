@@ -120,7 +120,7 @@ def customShadowCallback_Delete(payload, responseStatus, token):
     if responseStatus == "rejected":
         print("Delete request " + token + " rejected!")
 
-def update_shadow(host, thingName, kinesisStreamName, rootCAPath):
+def update_shadow(endpoint, thingName, kinesisStreamName, rootCAPath):
 
     port = 8883
 
@@ -130,7 +130,7 @@ def update_shadow(host, thingName, kinesisStreamName, rootCAPath):
     clientId = thingName
 
     myAWSIoTMQTTShadowClient = AWSIoTMQTTShadowClient(clientId)
-    myAWSIoTMQTTShadowClient.configureEndpoint(host, port)
+    myAWSIoTMQTTShadowClient.configureEndpoint(endpoint, port)
     myAWSIoTMQTTShadowClient.configureCredentials(rootCAPath, privateKeyPath, certificatePath)
 
     # AWSIoTMQTTShadowClient configuration
@@ -156,19 +156,14 @@ def update_shadow(host, thingName, kinesisStreamName, rootCAPath):
 
 if __name__ == "__main__":
 
-    #host = "a3b702ec6qczpq.iot.us-east-1.amazonaws.com"
-    #rootCAPath = "principals/root-CA.crt"
-    #attrKinesisStreamName = "attrKinesisStreamName"
-    #shadowKinesisStreamName = "shadowKinesisStreamName"
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("-h", "--host", action="store", required=True, dest="host", help="Your AWS IoT custom endpoint")
+    parser.add_argument("-e", "--endpoint", action="store", required=True, dest="endpoint", help="Your AWS IoT custom endpoint")
     parser.add_argument("-r", "--rootCA", action="store", required=True, dest="rootCAPath", help="Root CA file path")
     parser.add_argument("-ak", "--attrKinesis", action="store", dest="attrKinesisStreamName", help="Attr Kinesis Stream Name")
     parser.add_argument("-sk", "--shadowKinesis", action="store", dest="shadowKinesisStreamName", help="Shadow Kinesis Stream Name")
 
     args = parser.parse_args()
-    host = args.host
+    endpoint = args.endpoint
     rootCAPath = args.rootCAPath
     attrKinesisStreamName = args.attrKinesisStreamName
     shadowKinesisStreamName = args.shadowKinesisStreamName
@@ -190,5 +185,5 @@ if __name__ == "__main__":
         save_to_file(device_id, certs)
 
         if shadow:
-            update_shadow(host, device_id, shadowKinesisStreamName, rootCAPath)
+            update_shadow(endpoint, device_id, shadowKinesisStreamName, rootCAPath)
             time.sleep(5)

@@ -1,5 +1,6 @@
 [
-  {"device_id": "8BNQNE", "attributes": true},
-  {"device_id": "UT8I16", "shadow": true},
-  {"device_id": "Z1IEAT"}
+  {"device_id": "attr", "attributes": true},
+  {"device_id": "shadow", "shadow": true},
+  {"device_id": "lambda"},
+  {"device_id": "direct"}
 ]

@@ -65,6 +65,11 @@ Resources:
                   - "cloudwatch:PutMetricData"
                   - "sqs:SendMessage"
                 Resource: "*"
+              -
+                Effect: Allow
+                Action: iot:Publish
+                Resource: "*"
+
   IoTLogAnalyzerLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -79,7 +84,7 @@ Resources:
           Type: CloudWatchLogs
           Properties:
             LogGroupName: !Ref IoTLogGroupName
-            FilterPattern: "[date, time, trace_id, principal_id, log_level, event, topic_name, client_id, message]"
+            FilterPattern: "[]"
   RouterLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -237,6 +242,14 @@ Resources:
           - - SELECT *, topic() AS topic, timestamp() AS timestamp FROM '
             - !Ref IoTTopicNamePrefix
             - '-lambda/+/in'''
+  RouterLambdaInvocationPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        SourceArn: !Join [ "", [ "arn:aws:iot:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":rule/", !Ref "LogAnalyzerIoTLambdaRule" ] ]
+        Action: lambda:InvokeFunction
+        Principal: iot.amazonaws.com
+        FunctionName: !GetAtt RouterLambdaFunction.Arn
+        SourceAccount: !Ref AWS::AccountId
   LogAnalyzerIoTAttrRule:
     Type: 'AWS::IoT::TopicRule'
     Properties:
@@ -261,8 +274,16 @@ Resources:
             - ' WHERE aws_lambda("'
             - !GetAtt IoTAttrLambdaFunction.Arn
             - '", {"topic":topic()}).streamName = "'
-            - !Ref LogAnalyzerAttrStream
+            - !GetAtt LogAnalyzerAttrStream.Arn
             - '"'
+  AttrLambdaInvocationPermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        SourceArn: !Join [ "", [ "arn:aws:iot:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":rule/", !Ref "LogAnalyzerIoTAttrRule" ] ]
+        Action: lambda:InvokeFunction
+        Principal: iot.amazonaws.com
+        FunctionName: !GetAtt IoTAttrLambdaFunction.Arn
+        SourceAccount: !Ref AWS::AccountId
   LogAnalyzerIoTShadowRuleIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -313,7 +334,7 @@ Resources:
             - ' WHERE get_thing_shadow(substring(substring(topic(), indexof(topic(), "/")+1), 0, indexof(substring(topic(), indexof(topic(), "/")+1), "/")), "'
             - !GetAtt LogAnalyzerIoTShadowRuleIAMRole.Arn
             - '").state.reported.kinesis_stream = "'
-            - !Ref LogAnalyzerShadowStream
+            - !GetAtt LogAnalyzerShadowStream.Arn
             - '"'
   LogAnalyzerIoTDirectRule:
     Type: 'AWS::IoT::TopicRule'
