@@ -3,19 +3,10 @@ from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 import sys
 import time
 import json
+import argparse
 
 device_ids = ['direct', 'lambda', 'shadow', 'attr']
-#device_ids = ['lambda']
-#device_ids = ['shadow']
-#device_ids = ['attr']
-
-host = "a3b702ec6qczpq.iot.us-east-1.amazonaws.com"
-rootCAPath = "./principals/root-CA.crt"
 topics = ["sgas-direct/direct/in", "sgas-lambda/lambda/in", "sgas-shadow/shadow/in", "sgas-attr/attr/in"]
-#topics = ["sgas-lambda/lambda/in"]
-#topics = ["sgas-shadow/shadow/in"]
-#topics = ["sgas-attr/attr/in"]
-
 
 class CallbackContainer(object):
 
@@ -27,7 +18,6 @@ class CallbackContainer(object):
         print(message.payload)
         print("from topic: ")
         print(message.topic)
-        #myAWSIoTMQTTClient.disconnect()
         print("\nsequences are")
         for msg in json.loads(message.payload):
             print(msg['sequence'])
@@ -48,57 +38,63 @@ class CallbackContainer(object):
         print("++++++++++++++\n\n")
 
 
-print " "
-print "*************************************"
+if __name__ == "__main__":
 
-print "Activating sender...\n"
-print " "
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", "--endpoint", action="store", required=True, dest="endpoint", help="Your AWS IoT custom endpoint")
+    parser.add_argument("-r", "--rootCA", action="store", required=True, dest="rootCAPath", help="Root CA file path")
 
-# Init AWSIoTMQTTClient
-clients = []
-for idx in range(len(device_ids)):
+    args = parser.parse_args()
+    endpoint = args.endpoint
+    rootCAPath = args.rootCAPath
 
-    topic = topics[idx]
-    certificatePath = "./principals/%s.cert.pem" % device_ids[idx]
-    privateKeyPath = "./principals/%s.private.key" % device_ids[idx]
+    print " "
+    print "*************************************"
 
-    myAWSIoTMQTTClient = AWSIoTMQTTClient(topic)
-    myAWSIoTMQTTClient.configureEndpoint(host, 8883)
-    myAWSIoTMQTTClient.configureCredentials(rootCAPath, privateKeyPath, certificatePath)
+    print "Activating sender...\n"
+    print " "
 
-    myCallbackContainer = CallbackContainer(myAWSIoTMQTTClient)
+    # Init AWSIoTMQTTClient
+    clients = []
+    for idx in range(len(device_ids)):
 
-    # AWSIoTMQTTClient connection configuration
-    myAWSIoTMQTTClient.configureAutoReconnectBackoffTime(1, 32, 20)
-    myAWSIoTMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
-    myAWSIoTMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
-    myAWSIoTMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
-    myAWSIoTMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
+        topic = topics[idx]
+        certificatePath = "./principals/%s.cert.pem" % device_ids[idx]
+        privateKeyPath = "./principals/%s.private.key" % device_ids[idx]
 
-    # Connect and subscribe to AWS IoT
-    myAWSIoTMQTTClient.connect()
+        myAWSIoTMQTTClient = AWSIoTMQTTClient(topic)
+        myAWSIoTMQTTClient.configureEndpoint(endpoint, 8883)
+        myAWSIoTMQTTClient.configureCredentials(rootCAPath, privateKeyPath, certificatePath)
 
-    clients.append(myAWSIoTMQTTClient)
+        myCallbackContainer = CallbackContainer(myAWSIoTMQTTClient)
 
-#print("subscribe to reply message topic")
-#myAWSIoTMQTTClient.subscribeAsync(topic + "/reply", 1, ackCallback=myCallbackContainer.subackCallback, messageCallback=myCallbackContainer.messagePrint)
+        # AWSIoTMQTTClient connection configuration
+        myAWSIoTMQTTClient.configureAutoReconnectBackoffTime(1, 32, 20)
+        myAWSIoTMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
+        myAWSIoTMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
+        myAWSIoTMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
+        myAWSIoTMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
 
+        # Connect and subscribe to AWS IoT
+        myAWSIoTMQTTClient.connect()
 
-print("sending first message")
-for idx in range(len(device_ids)):
-    topic = topics[idx]
-    message = {"data": device_ids[idx]}
-    print("%s" % message)
-    clients[idx].publishAsync(topic, json.dumps(message), 1, ackCallback=myCallbackContainer.pubackCallback)
+        clients.append(myAWSIoTMQTTClient)
 
-try:
-    # Publish to the same topic in a loop forever
-    while True:
-        time.sleep(20)
-        for idx in range(len(device_ids)):
-            topic = topics[idx]
-            message = {"data": device_ids[idx]}
-            print("%s" % message)
-            clients[idx].publishAsync(topic, json.dumps(message), 1, ackCallback=myCallbackContainer.pubackCallback)
-except Exception, ex:
-    print ex
+    print("sending first message")
+    for idx in range(len(device_ids)):
+        topic = topics[idx]
+        message = {"data": device_ids[idx]}
+        print("%s" % message)
+        clients[idx].publishAsync(topic, json.dumps(message), 1, ackCallback=myCallbackContainer.pubackCallback)
+
+    try:
+        # Publish to the same topic in a loop forever
+        while True:
+            time.sleep(20)
+            for idx in range(len(device_ids)):
+                topic = topics[idx]
+                message = {"data": device_ids[idx]}
+                print("%s" % message)
+                clients[idx].publishAsync(topic, json.dumps(message), 1, ackCallback=myCallbackContainer.pubackCallback)
+    except Exception, ex:
+        print ex

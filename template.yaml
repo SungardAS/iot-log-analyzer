@@ -6,14 +6,15 @@ Parameters:
   IoTTopicNamePrefix:
     Description: Enter Topic Name Prefix
     Type: String
-    Default: "sky"
+    Default: "sgas"
   IoTBaseRuleNamePrefix:
     Description: Enter Rule Name Prefix
     Type: String
-    Default: "LogAnalyzer_rule"
+    Default: "iot_analyzer_rule"
   IoTLogGroupName:
     Description: Enter Iot CloudwatchLog Group Name
     Type: String
+    Default: "AWSIotLogsV2"
 
 Resources:
   LambdaFunctionIAMRole:
